@@ -45,8 +45,7 @@ class MainActivity : AppCompatActivity() {
     private var lap = 1
     private var lastTimeBackPressed: Long = -1500
 
-    private lateinit var recyclerView: RecyclerView
-    private lateinit var adapter: RecyclerView.Adapter<*>
+    public lateinit var adapter: MyAdapter
 
     private val coordinationList: ArrayList<String> = ArrayList<String>()
 
@@ -65,17 +64,17 @@ class MainActivity : AppCompatActivity() {
 
             val coordinate = "Location: latitude $latitude, longitude $longitude"
             textView.text = coordinate
-
+            val now = System.currentTimeMillis()
+            val date = Date(now)
+            val sdfNow = SimpleDateFormat("yy_MM_dd_HH_mm_ss")
+            val currentTime = sdfNow.format(date) // filename String
             try {
-                val now = System.currentTimeMillis()
-                val date = Date(now)
-                val sdfNow = SimpleDateFormat("yy_MM_dd_HH_mm_ss")
-                val currentTime = sdfNow.format(date) // filename String
+
                 val buf = BufferedWriter(FileWriter(file, true))
                 buf.append("$currentTime : $coordinate")
                 buf.newLine()
                 buf.close()
-                recyclerView.
+
 
             } catch (e: FileNotFoundException) {
                 e.printStackTrace()
@@ -87,6 +86,8 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 Toast.makeText(this@MainActivity, coordinate, Toast.LENGTH_LONG).show()
                 // file write??
+                adapter.addData("$currentTime\n$coordinate")
+
             }
 
         }
@@ -109,6 +110,7 @@ class MainActivity : AppCompatActivity() {
 //        lapLayout.removeAllViews()
         lap = 1
 
+        adapter.clearData()
         // File write all the things in lapLayout
     }
 
@@ -165,9 +167,11 @@ class MainActivity : AppCompatActivity() {
             reset()
         }
 
-        recyclerView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
+        resultList.layoutManager = LinearLayoutManager(
+            this, LinearLayoutManager.VERTICAL, false
+        );
         adapter = MyAdapter(coordinationList)
-        recyclerView.adapter = adapter;
+        resultList.adapter = adapter;
     }
 
 

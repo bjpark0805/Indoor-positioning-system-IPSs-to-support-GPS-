@@ -29,4 +29,9 @@ class MyAdapter(var items: ArrayList<String>) : RecyclerView.Adapter<MyAdapter.V
         notifyDataSetChanged()
     }
 
+    fun clearData(){
+        this.items.clear()
+        notifyDataSetChanged()
+    }
+
 }
