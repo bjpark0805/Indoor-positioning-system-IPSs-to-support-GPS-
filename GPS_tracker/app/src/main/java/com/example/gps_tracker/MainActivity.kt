@@ -1,6 +1,7 @@
 package com.example.gps_tracker
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
@@ -9,32 +10,121 @@ import android.location.Address
 import android.location.Geocoder
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import java.io.IOException
+import kotlinx.android.synthetic.main.activity_main.*
+import java.io.*
+import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.concurrent.timer
 
 
 const val EXTRA_MESSAGE = "com.example.gps_tracker.MESSAGE"
 const val GPS_ENABLE_REQUEST_CODE = 2001
 const val PERMISSIONS_REQUEST_CODE = 100
 
+
 class MainActivity : AppCompatActivity() {
     var REQUIRED_PERMISSIONS = arrayOf<String>(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
     )
+    private var time = 0
+    private var isRunning = false
+    private var timerTask: Timer? = null
+    private var lap = 1
+    private var lastTimeBackPressed: Long = -1500
+
+//    val path = "/data/data/GPS_tracker/files/experiment/${current_time}.txt"
+
+
+
+
+    private fun start(file: File){
+        play_fab.setImageResource(R.drawable.ic_pause)
+        val textView = TextView(this)
+        val gpsTracker = GpsTracker(this@MainActivity)
+        timerTask = timer(period = 10000){
+            time++
+
+            val latitude = gpsTracker.getLatitude()
+            val longitude = gpsTracker.getLongitude()
+
+            val coordinate = "Location: \nlatitude $latitude\nlongitude $longitude"
+            textView.text = coordinate
+
+
+
+            try{
+                val now = System.currentTimeMillis()
+                val date = Date(now)
+                val sdfNow = SimpleDateFormat("yy_MM_dd_HH_mm_ss")
+                val currentTime = sdfNow.format(date) // filename String
+                val buf = BufferedWriter(FileWriter(file, true))
+                buf.append("$currentTime : $coordinate")
+                buf.newLine()
+                buf.close()
+            }catch (e: FileNotFoundException){
+                e.printStackTrace()
+            }catch(e: IOException){
+                e.printStackTrace()
+            }
+            lap++
+
+            runOnUiThread{
+                Toast.makeText(this@MainActivity, coordinate, Toast.LENGTH_LONG).show()
+                if (textView.getParent() != null) {
+                    (textView.getParent() as ViewGroup).removeView(textView) // <- fix
+                }
+                labLayout.addView(textView, 0)
+                // file write??
+            }
+
+        }
+    }
+    private fun pause(){
+        play_fab.setImageResource(R.drawable.ic_stat_name)
+        // Timer객체의 cancel메소드로 타이머 중지 가능
+        timerTask?.cancel()
+    }
+
+    private fun reset(){
+        timerTask?.cancel()
+
+        if(isRunning)
+            isRunning = false
+
+        time = 0
+        play_fab.setImageResource(R.drawable.ic_stat_name) // ic_stat_name == play (I misnamed the icon)
+//        lapLayout.removeAllViews()
+        lap=1
+
+        // File write all the things in lapLayout
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        val now1 = System.currentTimeMillis()
+        val date1 = Date(now1)
+        val sdfNow1 = SimpleDateFormat("yy_MM_dd")
+        val today = sdfNow1.format(date1) // filename String
+        val filename = "/${today}.txt"
+        val FileDirectory = getExternalFilesDir(null)
+        val file = File(FileDirectory, filename)
+        if (file.exists()){
+            Toast.makeText(this@MainActivity, filename, Toast.LENGTH_LONG).show()
+
+        }
 
         if (!checkLocationServicesStatus()) {
             showDialogForLocationServiceSetting()
@@ -42,20 +132,36 @@ class MainActivity : AppCompatActivity() {
             checkRunTimePermission();
         }
 
-        val textviewaddress = findViewById<TextView>(R.id.textView)
+//        val textviewaddress = findViewById<TextView>(R.id.textView)
+
+        // ShowLocationButton is for the test.
         val showLocationButton = findViewById<Button>(R.id.button)
+
         val clickListener = View.OnClickListener { view-> //view를 딱히 사용은 안해서 그냥 아무것도 안해놨는데 나중에 view가 필요하면 update
             val gpsTracker = GpsTracker(this@MainActivity)
 
             val latitude = gpsTracker.getLatitude()
             val longitude = gpsTracker.getLongitude()
 
-            val address = getCurrentAddress(latitude, longitude)
-            textviewaddress.text = address
-
-            Toast.makeText(this@MainActivity, "Location: \nlatitude $latitude\nlongitude $longitude", Toast.LENGTH_LONG).show()
+//            val address = getCurrentAddress(latitude, longitude)
+//            textviewaddress.text = address
+            val string = "Location: \nlatitude $latitude\nlongitude $longitude"
+            Toast.makeText(this@MainActivity, string, Toast.LENGTH_LONG).show()
         }
+
         showLocationButton.setOnClickListener(clickListener)
+
+        play_fab.setOnClickListener{
+            when(isRunning){
+                false->start(file)
+                true->pause()
+            }
+            isRunning =  !isRunning
+        }
+
+        clear.setOnClickListener{
+            reset()
+        }
 
     }
 
@@ -140,7 +246,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDialogForLocationServiceSetting() {
-        val builder: android.app.AlertDialog.Builder = android.app.AlertDialog.Builder(this@MainActivity)
+        val builder: AlertDialog.Builder = AlertDialog.Builder(this@MainActivity)
         builder.setTitle("Address service deactivated")
         builder.setMessage(
             """
@@ -182,5 +288,12 @@ class MainActivity : AppCompatActivity() {
         val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         return (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                 || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER))
+    }
+
+    fun saveFile(inputStream: InputStream, filePath: String){
+        val saveFile = File(filePath)
+        saveFile.outputStream().use{fileOutput->
+            inputStream.copyTo(fileOutput)
+        }
     }
 }
